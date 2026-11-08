@@ -1,0 +1,569 @@
+import pandas as pd
+import numpy as np
+import random
+
+ID_FOGLIO = "1ula298Ry_2ld8ejwDEPu-BvQDhRk1IrTp0NyckL1USI"
+ID_SCHEDA = "1030801160"
+
+URL_GOOGLE_SHEETS = (f"https://docs.google.com/spreadsheets/d/{ID_FOGLIO}/export?format=csv")
+
+COLONNA_NOME = 0
+COLONNA_PREZZO = 16
+COLONNA_ACIDITA = 7
+COLONNA_INTENSITA = 8
+COLONNA_DOLCEZZA = 9
+COLONNA_TANNINI = 10
+
+features = [
+    "acidita",
+    "intensita",
+    "dolcezza",
+    "tannini"
+]
+
+#nel dataset ci sono alcune bottiglie di vino senza prezzo, quindi invece di escluderle visto che è solo una simulazione, gli da un prezzo casuale da 5 a 50 euro
+PREZZO_MINIMO_CASUALE = 5.00
+PREZZO_MASSIMO_CASUALE = 50.00
+
+#parte di pulizia del dataset
+def converti_numero(valore):
+
+    if pd.isna(valore):
+        return np.nan
+
+    valore = str(valore).strip()
+    valore = valore.replace("€", "").replace(" ", "")
+
+    if valore == "":
+        return np.nan
+
+    if "," in valore and "." in valore:
+        if valore.rfind(",") > valore.rfind("."):
+            valore = valore.replace(".", "").replace(",", ".")
+        else:
+            valore = valore.replace(",", "")
+
+    else:
+        valore = valore.replace(",", ".")
+
+    try:
+        numero = float(valore)
+
+        if not np.isfinite(numero):
+            return np.nan
+        return numero
+
+    except ValueError:
+        return np.nan
+
+
+def carica_da_indici(url):
+    try:
+        df = pd.read_csv(url, encoding="utf-8-sig", dtype=str)
+
+    except Exception as errore:
+
+        raise RuntimeError(
+            "Impossibile scaricare il Google Sheets. "
+            "Controlla che il foglio sia condiviso con "
+            "'Chiunque abbia il link' e che l'URL sia corretto."
+        ) from errore
+
+    colonne_necessarie = [
+        COLONNA_NOME,
+        COLONNA_PREZZO,
+        COLONNA_ACIDITA,
+        COLONNA_INTENSITA,
+        COLONNA_DOLCEZZA,
+        COLONNA_TANNINI
+    ]
+
+    if len(df.columns) <= max(colonne_necessarie):
+        raise ValueError(
+            "Il foglio non contiene tutte le colonne richieste. "
+            "Controlla gli indici delle colonne."
+        )
+
+    # Crea un nuovo database contenente solo i dati necessari
+    df_pulito = pd.DataFrame()
+
+    df_pulito["nome"] = (
+        df.iloc[:, COLONNA_NOME]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    df_pulito["prezzo"] = (
+        df.iloc[:, COLONNA_PREZZO].apply(converti_numero)
+    )
+
+    df_pulito["acidita"] = (
+        df.iloc[:, COLONNA_ACIDITA].apply(converti_numero)
+    )
+
+    df_pulito["intensita"] = (
+        df.iloc[:, COLONNA_INTENSITA].apply(converti_numero)
+    )
+
+    df_pulito["dolcezza"] = (
+        df.iloc[:, COLONNA_DOLCEZZA].apply(converti_numero)
+    )
+
+    df_pulito["tannini"] = (
+        df.iloc[:, COLONNA_TANNINI].apply(converti_numero)
+    )
+
+    numero_iniziale = len(df_pulito)
+
+    df_pulito = df_pulito[
+        df_pulito["nome"] != ""
+    ].copy()
+
+    caratteristiche_valide = (
+        df_pulito[features].notna()
+        & df_pulito[features].ge(1)
+        & df_pulito[features].le(5)
+    ).all(axis=1)
+
+    df_pulito = df_pulito[
+        caratteristiche_valide
+    ].copy()
+
+    for f in features:
+        df_pulito[f] = df_pulito[f].round(2)
+
+    prezzi_mancanti = df_pulito["prezzo"].isna()
+
+    numero_prezzi_simulati = int(prezzi_mancanti.sum())
+
+    generatore = random.Random(42)
+
+    df_pulito.loc[prezzi_mancanti, "prezzo"] = [
+        round(
+            generatore.uniform(
+                PREZZO_MINIMO_CASUALE,
+                PREZZO_MASSIMO_CASUALE
+            ),
+            2
+        )
+        for _ in range(numero_prezzi_simulati)
+    ]
+
+    prezzi_validi = (
+        df_pulito["prezzo"].notna()
+        & np.isfinite(df_pulito["prezzo"])
+        & (df_pulito["prezzo"] >= 0)
+    )
+
+    df_pulito = df_pulito[
+        prezzi_validi
+    ].copy()
+
+    df_pulito["prezzo"] = df_pulito["prezzo"].round(2)
+
+    df_pulito = df_pulito.reset_index(drop=True)
+
+    if df_pulito.empty:
+        raise ValueError(
+            "Nessun vino valido trovato nel database."
+        )
+
+    # stampa se il database è stato letto e pulito correttamente
+    print("\nDATABASE CARICATO CORRETTAMENTE")
+    print("")
+    print("Righe iniziali:", numero_iniziale)
+    print("Vini validi:", len(df_pulito))
+    print("Prezzi simulati:", numero_prezzi_simulati)
+    print(
+        "Vini esclusi:",
+        numero_iniziale - len(df_pulito)
+    )
+    print("")
+
+    return df_pulito
+
+
+#Caricamento effettivo del database
+df_vini = carica_da_indici(URL_GOOGLE_SHEETS)
+
+
+
+#possibili scelte dell'utente
+PROFILI_CIBO = {
+
+    "1": {
+        "nome": "Grigliata o Arrosti di Carne",
+        "target": {
+            "acidita": 3.5,
+            "intensita": 5.0,
+            "dolcezza": 1.0,
+            "tannini": 5.0
+        }
+    },
+
+    "2": {
+        "nome": "Pesce al forno / Frutti di mare",
+        "target": {
+            "acidita": 4.5,
+            "intensita": 2.5,
+            "dolcezza": 1.5,
+            "tannini": 1.0
+        }
+    },
+
+    "3": {
+        "nome": "Primo piatto al pomodoro / Ragù",
+        "target": {
+            "acidita": 4.0,
+            "intensita": 3.5,
+            "dolcezza": 1.5,
+            "tannini": 3.0
+        }
+    },
+
+    "4": {
+        "nome": "Tagliere di Formaggi e Salumi",
+        "target": {
+            "acidita": 3.0,
+            "intensita": 4.0,
+            "dolcezza": 2.5,
+            "tannini": 3.5
+        }
+    },
+
+    "5": {
+        "nome": "Cena Vegana / Verdure / Risotti",
+        "target": {
+            "acidita": 4.0,
+            "intensita": 3.0,
+            "dolcezza": 2.0,
+            "tannini": 1.5
+        }
+    },
+
+    "6": {
+        "nome": "Pasticceria / Dessert / Torte",
+        "target": {
+            "acidita": 2.0,
+            "intensita": 3.5,
+            "dolcezza": 5.0,
+            "tannini": 1.0
+        }
+    }
+}
+
+
+PROFILI_OCCASIONE = {
+
+    "1": {
+        "nome": "Cena formale (Voglio fare un figurone)",
+        "peso_prezzo": -0.1
+    },
+
+    "2": {
+        "nome": "Cena informale tra amici (Basso budget)",
+        "peso_prezzo": -1.5
+    },
+
+    "3": {
+        "nome": "Cena romantica / Occasione speciale",
+        "peso_prezzo": -0.6
+    }
+}
+
+#Fitness
+def calcola_fitness(indice, target_cibo, budget, peso_prezzo, dati_vini):
+
+    vino = dati_vini.iloc[int(round(indice))]
+
+    if vino["prezzo"] > budget:
+        return -50.0
+
+    #Calcolo distanza quadratica tra vino e target.
+    distanza = 0.0
+
+    for f in features:
+        distanza += (vino[f] - target_cibo[f]) ** 2
+
+    #Calcolo la distanza euclidea
+    distanza_euclidea = np.sqrt(distanza)
+
+    #Penalizza i vini più costosi
+    penalita_prezzo = (
+        vino["prezzo"] / budget
+    ) * peso_prezzo
+    
+    return -distanza_euclidea + penalita_prezzo
+
+#PSO
+class Particella:
+
+    def __init__(self, limite_massimo_righe):
+
+        #Posizione iniziale casuale
+        self.posizione = random.uniform(0, limite_massimo_righe)
+
+        #Velocità iniziale casuale
+        self.velocita = random.uniform(-1, 1)
+
+        #Migliore posizione personale
+        self.pbest_posizione = self.posizione
+
+        #Migliore fitness personale
+        self.pbest_fitness = -float("inf")
+
+def pso_sommelier(target_cibo, budget, peso_prezzo, dati_vini, n_particelle=30, iterazioni=50):
+
+    limite_massimo_righe = len(dati_vini) - 1
+
+    sciame = [
+        Particella(limite_massimo_righe)
+        for _ in range(n_particelle)
+    ]
+
+    gbest_posizione = 0
+    gbest_fitness = -float("inf")
+
+    #Inizializzazione delle migliori soluzioni personali e globali
+    for p in sciame:
+
+        indice = int(round(p.posizione))
+
+        p.pbest_posizione = indice
+
+        p.pbest_fitness = calcola_fitness(indice, target_cibo, budget, peso_prezzo, dati_vini)
+
+        if p.pbest_fitness > gbest_fitness:
+
+            gbest_fitness = p.pbest_fitness
+            gbest_posizione = indice
+
+    #Parametri PSO
+    w = 0.7
+    c1 = 1.5
+    c2 = 1.5
+
+    #Evoluzione dello sciame
+    for t in range(iterazioni):
+
+        for p in sciame:
+
+            r1 = random.random()
+            r2 = random.random()
+
+            #Aggiornamento della velocità con peso d'inerzia
+            p.velocita = (
+                w * p.velocita
+                + c1 * r1 * (p.pbest_posizione - p.posizione)
+                + c2 * r2 * (gbest_posizione - p.posizione)
+            )
+
+            #Limita la velocità
+            p.velocita = max(-3, min(3, p.velocita))
+
+            #Aggiorna la posizione
+            p.posizione += p.velocita
+
+            p.posizione = max(
+                0,
+                min(limite_massimo_righe, p.posizione)
+            )
+
+            #Trasforma la posizione continua in un indice discreto perché le colonne sono numeri interi tra cui scegliere
+            indice = int(round(p.posizione))
+
+            #Calcola la fitness della soluzione corrente
+            fitness_attuale = calcola_fitness(indice, target_cibo, budget, peso_prezzo, dati_vini)
+
+            #Aggiorna il best personale
+            if fitness_attuale > p.pbest_fitness:
+
+                p.pbest_fitness = fitness_attuale
+                p.pbest_posizione = indice
+
+            #Aggiorna il best globale
+            if fitness_attuale > gbest_fitness:
+
+                gbest_fitness = fitness_attuale
+                gbest_posizione = indice
+
+    # Restituisce indice e fitness della migliore soluzione trovata
+    return gbest_posizione, gbest_fitness
+
+#PSO esecuzione di più sciami
+def pso_multiplo(
+    target_cibo,
+    budget,
+    peso_prezzo,
+    dati_vini,
+    numero_sciami=20
+):
+
+    risultati = {}
+
+    #20 sciami indipendenti
+    for numero in range(numero_sciami):
+
+        indice, fitness = pso_sommelier(
+            target_cibo,
+            budget,
+            peso_prezzo,
+            dati_vini,
+            n_particelle=30,
+            iterazioni=50
+        )
+
+        #conserva la migliore fitness per ogni vino
+        if indice not in risultati or fitness > risultati[indice]:
+            risultati[indice] = fitness
+
+    #ordina i vini trovati dai diversi sciami
+    classifica = sorted(
+        risultati.items(),
+        key=lambda elemento: elemento[1],
+        reverse=True
+    )
+
+    #Brute force per trovare il vero massimo globale
+    fitness_tutti_vini = [
+        calcola_fitness(
+            i, target_cibo, budget, peso_prezzo, dati_vini
+        )
+        for i in range(len(dati_vini))
+    ]
+
+    indice_globale = int(np.argmax(fitness_tutti_vini))
+    fitness_globale = fitness_tutti_vini[indice_globale]
+
+    return classifica, indice_globale, fitness_globale
+
+#calcolo somiglianza tra valori associati ad ogni caratteristica impostati tramite decisioni dell'user (target) e output del PSO 
+def calcola_percentuale_similarita(vino, target_cibo):
+
+    distanza = 0.0
+    for f in features:
+        distanza += (vino[f] - target_cibo[f]) ** 2
+
+    distanza = np.sqrt(distanza)
+
+    #la distanza massima teorica tra due profili con quattro caratteristiche comprese tra 1 e 5 è 8
+    percentuale = (1 - distanza / 8) * 100
+
+    return max(0, min(100, percentuale))
+
+#main
+def main():
+
+    print("")
+    print(" WINE SELECTOR ATTIVO ")
+    print("")
+
+    print("\nCosa ha cucinato chi ti ospita?")
+
+    for k, v in PROFILI_CIBO.items():
+        print(f"[{k}] {v['nome']}")
+
+    scelta_cibo = input("\nSeleziona il cibo: ").strip()
+
+    print("\nChe tipo di invito è?")
+
+    for k, v in PROFILI_OCCASIONE.items():
+        print(f"[{k}] {v['nome']}")
+
+    scelta_occasione = input("\nSeleziona l'occasione: ").strip()
+
+    #Inserimento del budget
+    try:
+        budget = float(
+            input("\nBudget massimo (€): ").replace(",", ".")
+        )
+
+        if budget <= 0:
+            raise ValueError
+
+    except ValueError:
+        print("Budget non valido.")
+        return
+
+    
+    cibo_scelto = PROFILI_CIBO.get(
+        scelta_cibo, PROFILI_CIBO["1"]
+    )
+
+    occasione_scelta = PROFILI_OCCASIONE.get(
+        scelta_occasione, PROFILI_OCCASIONE["2"]
+    )
+
+    #filtra i vini che rispettano il budget
+    vini_disponibili = df_vini[
+        df_vini["prezzo"] <= budget
+    ].reset_index(drop=True)
+
+    if vini_disponibili.empty:
+        print("\nNessun vino disponibile entro il budget.")
+        return
+
+    #avvio 20 sciami indipendenti
+    classifica, indice_globale, fitness_globale = pso_multiplo(
+        cibo_scelto["target"],
+        budget,
+        occasione_scelta["peso_prezzo"],
+        vini_disponibili,
+        numero_sciami=20
+    )
+
+    #recupero miglior vino globale
+    vino_migliore = vini_disponibili.iloc[indice_globale]
+
+    similarita = calcola_percentuale_similarita(
+        vino_migliore,
+        cibo_scelto["target"]
+    )
+
+    #stampa il risultato principale
+    print("\n" + "")
+    print(" MIGLIORE VINO TROVATO")
+    print("")
+
+    print("Nome:", vino_migliore["nome"])
+    print(f"Prezzo: {vino_migliore['prezzo']:.2f} €")
+    print("Abbinamento:", cibo_scelto["nome"])
+
+    print("\nCONFRONTO CON IL TARGET")
+
+    for f in features:
+        print(
+            f"{f.capitalize():12} "
+            f"Target: {cibo_scelto['target'][f]:.2f} "
+            f"| Vino: {vino_migliore[f]:.2f}"
+        )
+
+    print("\nFITNESS:", round(fitness_globale, 4))
+    print(f"SOMIGLIANZA: {similarita:.2f}%")
+
+    #stampa la classifica dei vini individuati dagli sciami
+    print("\n" + " ")
+    print(" CLASSIFICA DEI VINI TROVATI DAI 20 SCIAMI")
+    print(" ")
+
+    for posizione, (indice, fitness) in enumerate(classifica[:10], 1):
+
+        vino = vini_disponibili.iloc[indice]
+
+        percentuale = calcola_percentuale_similarita(
+            vino,
+            cibo_scelto["target"]
+        )
+
+        print(
+            f"\n{posizione}. {vino['nome']}"
+            f"\n   Prezzo: {vino['prezzo']:.2f} €"
+            f"\n   Fitness: {fitness:.4f}"
+            f"\n   Somiglianza: {percentuale:.2f}%"
+        )
+
+
+#avvio programma
+if __name__ == "__main__":
+    main()
