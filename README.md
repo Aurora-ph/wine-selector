@@ -42,7 +42,7 @@ A ogni occasione viene associato un peso che modifica l'influenza del prezzo nel
 
 # Fitness
 Il sistema utilizza la distanza euclidea per misurare la somiglianza tra le caratteristiche del vino e il profilo alimentare ideale.
-La funzione di fitness da massimizzare è:  \Fitness = -\D +(\frac{\prezzo}{\budget}*\peso_prezzo).
+La funzione di fitness da massimizzare è:  **Fitness = -D + (Prezzo / Budget × PesoPrezzo)**
 
 Dove:
   * \D rappresenta la distanza euclidea;
