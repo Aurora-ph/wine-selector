@@ -4,7 +4,7 @@ Il progetto consiste nello sviluppo di un sistema intelligente di raccomandazion
 # Dataset
 I dati vengono acquisiti da un documento Google Sheets accessibile attraverso il seguente link, utilizzato come database dei vini.
 
-https://docs.google.com/spreadsheets/d/1ula298Ry_2ld8ejwDEPu-BvQDhRk1IrTp0NyckL1USI/export?format=csv
+[https://docs.google.com/spreadsheets/d/1ula298Ry_2ld8ejwDEPu-BvQDhRk1IrTp0NyckL1USI/export?format=csv](https://docs.google.com/spreadsheets/d/1ula298Ry_2ld8ejwDEPu-BvQDhRk1IrTp0NyckL1USI/edit?usp=sharing)
 
 
 Per ogni vino vengono considerate sei informazioni: nome, prezzo, acidità, dolcezza, intensità, tannini. 
