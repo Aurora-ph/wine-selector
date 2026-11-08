@@ -3,7 +3,6 @@ import numpy as np
 import random
 
 ID_FOGLIO = "1ula298Ry_2ld8ejwDEPu-BvQDhRk1IrTp0NyckL1USI"
-ID_SCHEDA = "1030801160"
 
 URL_GOOGLE_SHEETS = (f"https://docs.google.com/spreadsheets/d/{ID_FOGLIO}/export?format=csv")
 
